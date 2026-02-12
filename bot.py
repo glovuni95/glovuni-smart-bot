@@ -415,21 +415,12 @@ def main() -> None:
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
         application.add_error_handler(error_handler)
         
-        logger.info("إعداد Webhook...")
+        logger.info("بدء تشغيل البوت باستخدام Polling...")
         
-        # تحديد webhook URL
-        if RAILWAY_URL:
-            webhook_url = f"{RAILWAY_URL}/{TELEGRAM_BOT_TOKEN}"
-        else:
-            webhook_url = f"https://{HEROKU_APP_NAME}.herokuapp.com/{TELEGRAM_BOT_TOKEN}"
-        
-        logger.info(f"Webhook URL: {webhook_url}")
-        
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path=TELEGRAM_BOT_TOKEN,
-            webhook_url=webhook_url
+        # استخدام Polling بدلاً من Webhook (أسهل وأكثر موثوقية)
+        application.run_polling(
+            allowed_updates=None,
+            drop_pending_updates=True
         )
         
     except Exception as e:
