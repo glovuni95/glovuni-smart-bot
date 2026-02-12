@@ -30,8 +30,9 @@ WHATSAPP_API_URL = os.environ.get("WHATSAPP_API_URL", "")  # سيتم تعيين
 WHATSAPP_API_TOKEN = os.environ.get("WHATSAPP_API_TOKEN", "")  # سيتم تعيينه لاحقاً
 
 INSTAGRAM_URL = "https://www.instagram.com/glovuni/"
-PORT = int(os.environ.get('PORT', 8443))
+PORT = int(os.environ.get('PORT', 8000))
 HEROKU_APP_NAME = os.environ.get("HEROKU_APP_NAME", "glovuni-bot")
+RAILWAY_URL = os.environ.get("RAILWAY_URL", "")  # URL من Railway
 
 # --- حالات المحادثة ---
 FOLLOW_CHECK, NAME, EMAIL, PHONE, MAJOR, COUNTRY, UPLOAD_DOCS = range(7)
@@ -415,11 +416,20 @@ def main() -> None:
         application.add_error_handler(error_handler)
         
         logger.info("إعداد Webhook...")
+        
+        # تحديد webhook URL
+        if RAILWAY_URL:
+            webhook_url = f"{RAILWAY_URL}/{TELEGRAM_BOT_TOKEN}"
+        else:
+            webhook_url = f"https://{HEROKU_APP_NAME}.herokuapp.com/{TELEGRAM_BOT_TOKEN}"
+        
+        logger.info(f"Webhook URL: {webhook_url}")
+        
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             url_path=TELEGRAM_BOT_TOKEN,
-            webhook_url=f"https://{HEROKU_APP_NAME}.herokuapp.com/{TELEGRAM_BOT_TOKEN}"
+            webhook_url=webhook_url
         )
         
     except Exception as e:
