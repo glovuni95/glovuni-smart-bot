@@ -1,1 +1,1 @@
-web: python3 /home/ubuntu/glovuni_bot_heroku.py
+web: python3 bot.py
