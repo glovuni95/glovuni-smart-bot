@@ -4,6 +4,7 @@
 import os
 import json
 import logging
+import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from openai import OpenAI
@@ -34,8 +35,12 @@ except FileNotFoundError:
     logger.warning("ملف قاعدة المعرفة غير موجود")
     knowledge_base = {}
 
-# متابعة حالة المتابعة (في الإنتاج يجب استخدام قاعدة بيانات)
-user_followers = {}
+# معلومات Instagram
+INSTAGRAM_URL = "https://www.instagram.com/glovuni?igsh=MXVtMDdmM2ZrZ2Flcw=="
+INSTAGRAM_USERNAME = "glovuni"
+
+# متابعة حالة المستخدمين
+user_states = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """معالج أمر /start - الرد الترحيبي"""
@@ -45,8 +50,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # إنشاء لوحة المفاتيح مع أزرار Instagram
     keyboard = [
         [
-            InlineKeyboardButton("📱 تابعنا على إنستقرام", 
-                               url=knowledge_base.get('company', {}).get('instagram_url', 'https://instagram.com')),
+            InlineKeyboardButton("📱 تابعنا على إنستقرام", url=INSTAGRAM_URL),
             InlineKeyboardButton("✅ تحقق من المتابعة", callback_data='check_follow')
         ],
         [
@@ -78,17 +82,65 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     await update.message.reply_text(welcome_message, reply_markup=reply_markup)
 
+async def check_instagram_follow(user_id: int) -> bool:
+    """التحقق من متابعة المستخدم لحساب Instagram"""
+    try:
+        # محاولة الحصول على معلومات المستخدم من Instagram
+        # ملاحظة: هذا يتطلب Instagram API Token
+        # للآن سنستخدم طريقة بسيطة - نطلب من المستخدم التأكيد
+        return True  # في الإنتاج يجب التحقق الفعلي
+    except Exception as e:
+        logger.error(f"خطأ في التحقق من Instagram: {e}")
+        return False
+
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """معالج أزرار الواجهة"""
     query = update.callback_query
+    user_id = query.from_user.id
+    
     await query.answer()
     
     if query.data == 'check_follow':
-        # التحقق من المتابعة (في الإنتاج يجب التحقق من Instagram API)
+        # التحقق من المتابعة
+        check_message = f"""
+📱 للتحقق من المتابعة:
+
+1️⃣ تأكد من متابعة صفحتنا: @{INSTAGRAM_USERNAME}
+2️⃣ يمكنك الضغط على الزر أدناه لفتح الصفحة مباشرة
+3️⃣ بعد المتابعة، ستتمكن من استخدام جميع خدمات البوت
+
+✅ شكراً لمتابعتك لنا!
+"""
+        keyboard = [
+            [InlineKeyboardButton("📱 فتح صفحة Instagram", url=INSTAGRAM_URL)],
+            [InlineKeyboardButton("🔄 تحديث", callback_data='check_follow')],
+            [InlineKeyboardButton("⬅️ العودة", callback_data='main_menu')]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text=check_message, reply_markup=reply_markup)
+        
+    elif query.data == 'main_menu':
+        # العودة للقائمة الرئيسية
+        keyboard = [
+            [
+                InlineKeyboardButton("📱 تابعنا على إنستقرام", url=INSTAGRAM_URL),
+                InlineKeyboardButton("✅ تحقق من المتابعة", callback_data='check_follow')
+            ],
+            [
+                InlineKeyboardButton("🎓 البرامج الدراسية", callback_data='programs'),
+                InlineKeyboardButton("🏫 الجامعات", callback_data='universities')
+            ],
+            [
+                InlineKeyboardButton("💰 المنح الدراسية", callback_data='scholarships'),
+                InlineKeyboardButton("❓ أسئلة شائعة", callback_data='faq')
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await query.edit_message_text(
-            text="✅ شكراً لمتابعتك لنا على إنستقرام!\n\nكيف يمكنني مساعدتك؟",
-            reply_markup=get_main_keyboard()
+            text="👋 اختر من القائمة أدناه:",
+            reply_markup=reply_markup
         )
+        
     elif query.data == 'programs':
         programs_text = "🎓 البرامج الدراسية المتاحة:\n\n"
         for specialty, programs in knowledge_base.get('specialties', {}).items():
@@ -96,14 +148,20 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             for program in programs:
                 programs_text += f"  • {program}\n"
             programs_text += "\n"
-        await query.edit_message_text(text=programs_text, reply_markup=get_main_keyboard())
+        keyboard = [[InlineKeyboardButton("⬅️ العودة", callback_data='main_menu')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text=programs_text, reply_markup=reply_markup)
+        
     elif query.data == 'universities':
         universities_text = "🏫 الدول والجامعات المتاحة:\n\n"
         for country, info in knowledge_base.get('countries', {}).items():
             universities_text += f"🌍 {info.get('name', country)}\n"
             universities_text += f"   عدد الجامعات: {info.get('universities_count', 'N/A')}\n"
             universities_text += f"   المدن الرئيسية: {', '.join(info.get('main_cities', []))}\n\n"
-        await query.edit_message_text(text=universities_text, reply_markup=get_main_keyboard())
+        keyboard = [[InlineKeyboardButton("⬅️ العودة", callback_data='main_menu')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text=universities_text, reply_markup=reply_markup)
+        
     elif query.data == 'scholarships':
         scholarships_text = "💰 المنح الدراسية:\n\n"
         for scholarship in knowledge_base.get('scholarships', {}).get('types', []):
@@ -111,7 +169,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             scholarships_text += f"   التغطية: {scholarship.get('coverage', 'N/A')}\n"
             scholarships_text += f"   المتطلبات: {scholarship.get('requirement', 'N/A')}\n\n"
         scholarships_text += f"\n📊 إجمالي المنح: {knowledge_base.get('scholarships', {}).get('total_scholarships', 'N/A')}"
-        await query.edit_message_text(text=scholarships_text, reply_markup=get_main_keyboard())
+        keyboard = [[InlineKeyboardButton("⬅️ العودة", callback_data='main_menu')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text=scholarships_text, reply_markup=reply_markup)
+        
     elif query.data == 'faq':
         faq_text = "❓ الأسئلة الشائعة:\n\n"
         faq = knowledge_base.get('faq', {})
@@ -121,7 +182,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if q_key in faq and a_key in faq:
                 faq_text += f"❓ {faq[q_key]}\n"
                 faq_text += f"✅ {faq[a_key]}\n\n"
-        await query.edit_message_text(text=faq_text, reply_markup=get_main_keyboard())
+        keyboard = [[InlineKeyboardButton("⬅️ العودة", callback_data='main_menu')]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.edit_message_text(text=faq_text, reply_markup=reply_markup)
 
 def get_main_keyboard():
     """إرجاع لوحة المفاتيح الرئيسية"""
@@ -135,8 +198,8 @@ def get_main_keyboard():
             InlineKeyboardButton("❓ أسئلة", callback_data='faq')
         ],
         [
-            InlineKeyboardButton("📱 تابعنا", 
-                               url=knowledge_base.get('company', {}).get('instagram_url', 'https://instagram.com'))
+            InlineKeyboardButton("📱 تابعنا", url=INSTAGRAM_URL),
+            InlineKeyboardButton("✅ تحقق", callback_data='check_follow')
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -242,8 +305,8 @@ Glovuni هي منصة تعليمية شاملة توفر:
 • خدمات الإسكان والنقل
 • دعم التأشيرات
 
-📱 تابعنا على إنستقرام: {knowledge_base.get('company', {}).get('instagram', '@GlovuniOfficial')}
-🌐 زر موقعنا: {knowledge_base.get('company', {}).get('website', 'https://www.glovuni.com')}
+📱 تابعنا على إنستقرام: @glovuni
+🌐 زر موقعنا: https://www.glovuni.com
 """
     await update.message.reply_text(about_text, reply_markup=get_main_keyboard())
 
@@ -252,9 +315,10 @@ async def contact_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     contact_text = f"""
 📞 معلومات التواصل
 
-📱 إنستقرام: {knowledge_base.get('company', {}).get('instagram', '@GlovuniOfficial')}
+📱 إنستقرام: @glovuni
+🔗 رابط الصفحة: {INSTAGRAM_URL}
 
-🌐 الموقع الرسمي: {knowledge_base.get('company', {}).get('website', 'https://www.glovuni.com')}
+🌐 الموقع الرسمي: https://www.glovuni.com
 
 💬 يمكنك أيضاً:
 • طرح أسئلتك هنا مباشرة
